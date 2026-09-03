@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 from claude_genmon.core import Usage, UsageStats
 
@@ -22,9 +21,9 @@ class LocalDiskUsage(Usage):
 
     def __init__(self, stats_cache_path: str = DEFAULT_STATS_CACHE_PATH):
         self.stats_cache_path = stats_cache_path
-        self.last_error: Optional[Exception] = None
+        self.last_error: Exception | None = None
 
-    def fetch(self) -> Optional[UsageStats]:
+    def fetch(self) -> UsageStats | None:
         self.last_error = None
         try:
             with open(self.stats_cache_path, "r", encoding="utf-8") as f:

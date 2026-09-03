@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
-from typing import Optional
 
 from claude_genmon.core import Usage, UsageStats
 
@@ -24,9 +23,9 @@ class AnthropicApiUsage(Usage):
         self.credentials_path = credentials_path
         self.url = url
         self.timeout = timeout
-        self.last_error: Optional[Exception] = None
+        self.last_error: Exception | None = None
 
-    def fetch(self) -> Optional[UsageStats]:
+    def fetch(self) -> UsageStats | None:
         self.last_error = None
         try:
             with open(self.credentials_path, "r", encoding="utf-8") as f:

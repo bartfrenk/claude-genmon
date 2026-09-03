@@ -33,3 +33,24 @@ class Usage(ABC):
     @abstractmethod
     def fetch(self) -> UsageStats | None:
         """Return current usage statistics, or None if unavailable."""
+
+    def __or__(self, other: Usage) -> Usage:
+        return _CombinedUsage(self, other)
+
+
+class _CombinedUsage(Usage):
+    """Combines two Usage sources: fetch() left-biased merges their results,
+    passing through whichever side is non-None if the other is None."""
+
+    def __init__(self, left: Usage, right: Usage):
+        self.left = left
+        self.right = right
+
+    def fetch(self) -> UsageStats | None:
+        left_stats = self.left.fetch()
+        right_stats = self.right.fetch()
+        if left_stats is None:
+            return right_stats
+        if right_stats is None:
+            return left_stats
+        return left_stats | right_stats

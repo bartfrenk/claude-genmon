@@ -20,40 +20,35 @@ class AnthropicApiUsage(Usage):
         url: str = DEFAULT_URL,
         timeout: int = 10,
     ):
+        super().__init__()
         self.credentials_path = credentials_path
         self.url = url
         self.timeout = timeout
-        self.last_error: Exception | None = None
 
-    def fetch(self) -> UsageStats | None:
-        self.last_error = None
-        try:
-            with open(self.credentials_path, "r", encoding="utf-8") as f:
-                credentials = json.load(f)
+    def _fetch(self) -> UsageStats | None:
+        with open(self.credentials_path, "r", encoding="utf-8") as f:
+            credentials = json.load(f)
 
-            token = credentials["claudeAiOauth"]["accessToken"]
+        token = credentials["claudeAiOauth"]["accessToken"]
 
-            request = urllib.request.Request(
-                self.url,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "anthropic-beta": "oauth-2025-04-20",
-                    "Accept": "application/json",
-                },
-            )
+        request = urllib.request.Request(
+            self.url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "anthropic-beta": "oauth-2025-04-20",
+                "Accept": "application/json",
+            },
+        )
 
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                usage = json.load(response)
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            usage = json.load(response)
 
-            five = usage.get("five_hour") or {}
-            week = usage.get("seven_day") or {}
+        five = usage.get("five_hour") or {}
+        week = usage.get("seven_day") or {}
 
-            return UsageStats(
-                five_hour_utilization=float(five.get("utilization", 0)),
-                five_hour_resets_at=five.get("resets_at"),
-                seven_day_utilization=float(week.get("utilization", 0)),
-                seven_day_resets_at=week.get("resets_at"),
-            )
-        except Exception as exc:
-            self.last_error = exc
-            return None
+        return UsageStats(
+            five_hour_utilization=float(five.get("utilization", 0)),
+            five_hour_resets_at=five.get("resets_at"),
+            seven_day_utilization=float(week.get("utilization", 0)),
+            seven_day_resets_at=week.get("resets_at"),
+        )

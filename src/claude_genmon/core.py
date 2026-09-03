@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, fields
 
 
@@ -30,8 +31,21 @@ class UsageStats:
 
 
 class Usage(ABC):
-    @abstractmethod
+    def __init__(self) -> None:
+        self.last_error: Exception | None = None
+
     def fetch(self) -> UsageStats | None:
+        """Return current usage statistics, or None if unavailable. Sets
+        `last_error` to the exception that caused the failure, if any."""
+        self.last_error = None
+        try:
+            return self._fetch()
+        except Exception as exc:
+            self.last_error = exc
+            return None
+
+    @abstractmethod
+    def _fetch(self) -> UsageStats | None:
         """Return current usage statistics, or None if unavailable."""
 
     def __or__(self, other: Usage) -> Usage:
@@ -43,12 +57,19 @@ class _CombinedUsage(Usage):
     passing through whichever side is non-None if the other is None."""
 
     def __init__(self, left: Usage, right: Usage):
+        super().__init__()
         self.left = left
         self.right = right
 
-    def fetch(self) -> UsageStats | None:
-        left_stats = self.left.fetch()
-        right_stats = self.right.fetch()
+    def _fetch(self) -> UsageStats | None:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            left_future = executor.submit(self.left.fetch)
+            right_future = executor.submit(self.right.fetch)
+            left_stats = left_future.result()
+            right_stats = right_future.result()
+
+        if left_stats is None and right_stats is None:
+            self.last_error = self.left.last_error or self.right.last_error
         if left_stats is None:
             return right_stats
         if right_stats is None:

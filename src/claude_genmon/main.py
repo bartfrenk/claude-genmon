@@ -3,6 +3,7 @@
 from html import escape
 
 from claude_genmon.api_usage import AnthropicApiUsage
+from claude_genmon.local_usage import LocalDiskUsage
 
 
 def output_error(message):
@@ -11,11 +12,11 @@ def output_error(message):
 
 
 def main():
-    usage = AnthropicApiUsage()
+    usage = AnthropicApiUsage() | LocalDiskUsage()
     stats = usage.fetch()
 
     if stats is None:
-        output_error(f"Claude usage error: {usage.last_error}")
+        output_error("Claude usage error: no usage data available")
         return
 
     five_pct = round(stats.five_hour_utilization or 0)

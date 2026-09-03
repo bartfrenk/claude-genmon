@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 
 @dataclass
@@ -13,6 +13,20 @@ class UsageStats:
     total_sessions: int | None = None
     total_messages: int | None = None
     total_tokens: int | None = None
+
+    def __or__(self, other: UsageStats) -> UsageStats:
+        """Left-biased merge: each field takes this instance's value, falling
+        back to `other`'s when this instance's is None."""
+        return UsageStats(
+            **{  # pyright: ignore[reportAny]
+                f.name: (
+                    getattr(self, f.name)
+                    if getattr(self, f.name) is not None
+                    else getattr(other, f.name)
+                )
+                for f in fields(self)
+            }
+        )
 
 
 class Usage(ABC):

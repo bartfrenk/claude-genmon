@@ -2,7 +2,21 @@ mod api;
 mod cache;
 mod core;
 
+use std::path::PathBuf;
+
 use cache::Cache;
+
+fn icon_path() -> PathBuf {
+    let data_dir = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_default()
+                .join(".local/share")
+        });
+    data_dir.join("claude-genmon/anthropic.png")
+}
 
 fn html_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -46,6 +60,11 @@ fn colored_percent(pct: i64) -> String {
 }
 
 fn main() {
+    let icon = icon_path();
+    if icon.exists() {
+        println!("<img>{}</img>", icon.display());
+    }
+
     let cache = Cache::default();
 
     match cache.get_usage() {

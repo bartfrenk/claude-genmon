@@ -40,7 +40,11 @@ fn parse_retry_after(value: Option<&str>, now: u64) -> u64 {
             return Some(now + secs);
         }
         let at = httpdate::parse_http_date(v.trim()).ok()?;
-        Some(at.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(now))
+        Some(
+            at.duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(now),
+        )
     });
     requested.unwrap_or(now).max(now + MIN_BACKOFF_SECS)
 }
@@ -218,7 +222,9 @@ mod tests {
         let path = temp_cache_path();
         let provider = MockProvider::new(vec![
             Ok(sample_stats(10.0)),
-            Err(GetUsageError::RateLimited { retry_after: Some("0".to_string()) }),
+            Err(GetUsageError::RateLimited {
+                retry_after: Some("0".to_string()),
+            }),
         ]);
         let cache = Cache::new(provider, path.clone());
 

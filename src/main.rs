@@ -69,11 +69,9 @@ fn main() {
 
     match cache.get_usage() {
         Ok(stats) => {
-            // Match Python's `round()`, which rounds half to even.
             let five_pct = stats.five_hours.utilization.round_ties_even() as i64;
             let week_pct = stats.seven_days.utilization.round_ties_even() as i64;
 
-            // Protect GenMon's bar from unexpected >100% values.
             let five_bar = five_pct.clamp(0, 100);
             let week_bar = week_pct.clamp(0, 100);
 

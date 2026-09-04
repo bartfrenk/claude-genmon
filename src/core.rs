@@ -1,52 +1,54 @@
-use anyhow::Result;
+use serde::Deserialize;
 
-/// Merged usage statistics from one or more [`UsageSource`]s.
-#[derive(Debug, Default, Clone)]
-pub struct UsageStats {
-    pub five_hour_utilization: Option<f64>,
-    pub five_hour_resets_at: Option<String>,
-    pub seven_day_utilization: Option<f64>,
-    pub seven_day_resets_at: Option<String>,
-    pub total_sessions: Option<u64>,
-    pub total_messages: Option<u64>,
-    pub total_tokens: Option<u64>,
+fn default_resets_at() -> String {
+    "unknown".to_string()
 }
 
-impl UsageStats {
-    /// Left-biased merge: each field keeps `self`'s value, falling back to
-    /// `other`'s when `self`'s is `None`.
-    pub fn merge(self, other: UsageStats) -> UsageStats {
-        UsageStats {
-            five_hour_utilization: self.five_hour_utilization.or(other.five_hour_utilization),
-            five_hour_resets_at: self.five_hour_resets_at.or(other.five_hour_resets_at),
-            seven_day_utilization: self.seven_day_utilization.or(other.seven_day_utilization),
-            seven_day_resets_at: self.seven_day_resets_at.or(other.seven_day_resets_at),
-            total_sessions: self.total_sessions.or(other.total_sessions),
-            total_messages: self.total_messages.or(other.total_messages),
-            total_tokens: self.total_tokens.or(other.total_tokens),
-        }
+/// Utilization and reset time for a single rate-limit window.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RateLimitWindow {
+    #[serde(default)]
+    pub utilization: f64,
+    #[serde(default = "default_resets_at")]
+    pub resets_at: String,
+}
+
+impl Default for RateLimitWindow {
+    fn default() -> Self {
+        Self { utilization: 0.0, resets_at: default_resets_at() }
     }
 }
 
-/// A source of usage statistics.
-pub trait UsageSource: Sync {
-    fn fetch(&self) -> Result<UsageStats>;
+/// Usage statistics for the current 5-hour and 7-day rate-limit windows, as
+/// returned by the Anthropic API's `/api/oauth/usage` endpoint.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct UsageStats {
+    #[serde(rename = "five_hour", default)]
+    pub five_hours: RateLimitWindow,
+    #[serde(rename = "seven_day", default)]
+    pub seven_days: RateLimitWindow,
 }
 
-/// Fetches from `left` and `right` concurrently and left-biased-merges the
-/// results. If one side fails, the other's result is returned outright. If
-/// both fail, `left`'s error is returned.
-pub fn combine(left: &dyn UsageSource, right: &dyn UsageSource) -> Result<UsageStats> {
-    let (left_result, right_result) = std::thread::scope(|scope| {
-        let left_handle = scope.spawn(|| left.fetch());
-        let right_handle = scope.spawn(|| right.fetch());
-        (left_handle.join().unwrap(), right_handle.join().unwrap())
-    });
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    match (left_result, right_result) {
-        (Ok(l), Ok(r)) => Ok(l.merge(r)),
-        (Ok(l), Err(_)) => Ok(l),
-        (Err(_), Ok(r)) => Ok(r),
-        (Err(left_err), Err(_)) => Err(left_err),
+    #[test]
+    fn deserializes_api_response() {
+        let json = r#"{
+            "five_hour": {"utilization": 42.5, "resets_at": "2026-09-05T00:00:00Z"},
+            "seven_day": {"utilization": 10.0, "resets_at": "2026-09-10T00:00:00Z"}
+        }"#;
+        let stats: UsageStats = serde_json::from_str(json).unwrap();
+        assert_eq!(stats.five_hours.utilization, 42.5);
+        assert_eq!(stats.five_hours.resets_at, "2026-09-05T00:00:00Z");
+        assert_eq!(stats.seven_days.utilization, 10.0);
+    }
+
+    #[test]
+    fn defaults_missing_fields() {
+        let stats: UsageStats = serde_json::from_str("{}").unwrap();
+        assert_eq!(stats.five_hours.utilization, 0.0);
+        assert_eq!(stats.five_hours.resets_at, "unknown");
     }
 }

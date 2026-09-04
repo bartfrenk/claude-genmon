@@ -1,9 +1,7 @@
-mod api_usage;
+mod api;
 mod core;
-mod local_usage;
 
-use api_usage::AnthropicApiUsage;
-use local_usage::LocalDiskUsage;
+use api::Client;
 
 fn html_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -26,14 +24,13 @@ fn output_error(message: &str) {
 }
 
 fn main() {
-    let api = AnthropicApiUsage::default();
-    let local = LocalDiskUsage::default();
+    let client = Client::default();
 
-    match core::combine(&api, &local) {
+    match client.get_usage() {
         Ok(stats) => {
             // Match Python's `round()`, which rounds half to even.
-            let five_pct = stats.five_hour_utilization.unwrap_or(0.0).round_ties_even() as i64;
-            let week_pct = stats.seven_day_utilization.unwrap_or(0.0).round_ties_even() as i64;
+            let five_pct = stats.five_hours.utilization.round_ties_even() as i64;
+            let week_pct = stats.seven_days.utilization.round_ties_even() as i64;
 
             // Protect GenMon's bar from unexpected >100% values.
             let five_bar = five_pct.clamp(0, 100);
@@ -42,8 +39,8 @@ fn main() {
             println!("{five_bar}% {week_bar}%");
             println!(
                 "<tool>5 hour: {five_pct}% used\n7 day: {week_pct}% used\n5h reset: {}\n7d reset: {}</tool>",
-                html_escape(stats.five_hour_resets_at.as_deref().unwrap_or("unknown")),
-                html_escape(stats.seven_day_resets_at.as_deref().unwrap_or("unknown")),
+                html_escape(&stats.five_hours.resets_at),
+                html_escape(&stats.seven_days.resets_at),
             );
         }
         Err(exc) => output_error(&format!(

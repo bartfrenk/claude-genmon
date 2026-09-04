@@ -10,8 +10,6 @@ install:
 	cargo build --release
 	install -Dm755 target/release/$(BINARY) $(PREFIX)/$(BINARY)
 
-reinstall: install
-
 uninstall:
 	-rm -f $(PREFIX)/$(BINARY)
 

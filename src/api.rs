@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
-use crate::core::{UsageSource, UsageStats};
+use crate::core::UsageStats;
 
 pub const DEFAULT_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 
@@ -16,13 +16,13 @@ fn default_credentials_path() -> PathBuf {
 
 /// Fetches rate-limit utilization from the Anthropic API using the OAuth
 /// token stored in the local Claude Code credentials file.
-pub struct AnthropicApiUsage {
+pub struct Client {
     credentials_path: PathBuf,
     url: String,
     timeout: Duration,
 }
 
-impl Default for AnthropicApiUsage {
+impl Default for Client {
     fn default() -> Self {
         Self {
             credentials_path: default_credentials_path(),
@@ -32,8 +32,8 @@ impl Default for AnthropicApiUsage {
     }
 }
 
-impl UsageSource for AnthropicApiUsage {
-    fn fetch(&self) -> Result<UsageStats> {
+impl Client {
+    pub fn get_usage(&self) -> Result<UsageStats> {
         let content = std::fs::read_to_string(&self.credentials_path)
             .with_context(|| format!("reading {}", self.credentials_path.display()))?;
         let credentials: serde_json::Value = serde_json::from_str(&content)?;
@@ -53,31 +53,7 @@ impl UsageSource for AnthropicApiUsage {
             .build()
             .call()?;
 
-        let usage: serde_json::Value = response.body_mut().read_json()?;
-
-        let five = usage.get("five_hour").cloned().unwrap_or_default();
-        let week = usage.get("seven_day").cloned().unwrap_or_default();
-
-        Ok(UsageStats {
-            five_hour_utilization: Some(
-                five.get("utilization")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0),
-            ),
-            five_hour_resets_at: five
-                .get("resets_at")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            seven_day_utilization: Some(
-                week.get("utilization")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0),
-            ),
-            seven_day_resets_at: week
-                .get("resets_at")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            ..Default::default()
-        })
+        let usage: UsageStats = response.body_mut().read_json()?;
+        Ok(usage)
     }
 }

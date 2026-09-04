@@ -1,7 +1,8 @@
 mod api;
+mod cache;
 mod core;
 
-use api::Client;
+use cache::Cache;
 
 fn html_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -24,9 +25,9 @@ fn output_error(message: &str) {
 }
 
 fn main() {
-    let client = Client::default();
+    let cache = Cache::default();
 
-    match client.get_usage() {
+    match cache.get_usage() {
         Ok(stats) => {
             // Match Python's `round()`, which rounds half to even.
             let five_pct = stats.five_hours.utilization.round_ties_even() as i64;

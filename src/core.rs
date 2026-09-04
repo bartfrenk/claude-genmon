@@ -1,11 +1,11 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 fn default_resets_at() -> String {
     "unknown".to_string()
 }
 
 /// Utilization and reset time for a single rate-limit window.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitWindow {
     #[serde(default)]
     pub utilization: f64,
@@ -15,13 +15,16 @@ pub struct RateLimitWindow {
 
 impl Default for RateLimitWindow {
     fn default() -> Self {
-        Self { utilization: 0.0, resets_at: default_resets_at() }
+        Self {
+            utilization: 0.0,
+            resets_at: default_resets_at(),
+        }
     }
 }
 
 /// Usage statistics for the current 5-hour and 7-day rate-limit windows, as
 /// returned by the Anthropic API's `/api/oauth/usage` endpoint.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UsageStats {
     #[serde(rename = "five_hour", default)]
     pub five_hours: RateLimitWindow,

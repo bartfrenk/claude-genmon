@@ -1,7 +1,8 @@
+use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 
 use crate::core::UsageStats;
 
@@ -12,6 +13,56 @@ fn default_credentials_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_default();
     home.join(".claude/.credentials.json")
+}
+
+/// A source of usage statistics, fallible in a way that distinguishes
+/// "rate limited" (recoverable, carries a `Retry-After`) from other errors.
+pub trait UsageProvider {
+    fn get_usage(&self) -> Result<UsageStats, GetUsageError>;
+}
+
+/// Error returned by [`UsageProvider::get_usage`].
+#[derive(Debug)]
+pub enum GetUsageError {
+    /// The API responded 429, optionally with a `Retry-After` header value.
+    RateLimited {
+        retry_after: Option<String>,
+    },
+    Other(anyhow::Error),
+}
+
+impl fmt::Display for GetUsageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GetUsageError::RateLimited {
+                retry_after: Some(v),
+            } => {
+                write!(f, "rate limited, retry after {v}")
+            }
+            GetUsageError::RateLimited { retry_after: None } => write!(f, "rate limited"),
+            GetUsageError::Other(e) => write!(f, "{e:#}"),
+        }
+    }
+}
+
+impl std::error::Error for GetUsageError {}
+
+impl From<anyhow::Error> for GetUsageError {
+    fn from(e: anyhow::Error) -> Self {
+        GetUsageError::Other(e)
+    }
+}
+
+impl From<serde_json::Error> for GetUsageError {
+    fn from(e: serde_json::Error) -> Self {
+        GetUsageError::Other(e.into())
+    }
+}
+
+impl From<ureq::Error> for GetUsageError {
+    fn from(e: ureq::Error) -> Self {
+        GetUsageError::Other(e.into())
+    }
 }
 
 /// Fetches rate-limit utilization from the Anthropic API using the OAuth
@@ -32,8 +83,8 @@ impl Default for Client {
     }
 }
 
-impl Client {
-    pub fn get_usage(&self) -> Result<UsageStats> {
+impl UsageProvider for Client {
+    fn get_usage(&self) -> Result<UsageStats, GetUsageError> {
         let content = std::fs::read_to_string(&self.credentials_path)
             .with_context(|| format!("reading {}", self.credentials_path.display()))?;
         let credentials: serde_json::Value = serde_json::from_str(&content)?;
@@ -50,8 +101,22 @@ impl Client {
             .header("Accept", "application/json")
             .config()
             .timeout_global(Some(self.timeout))
+            .http_status_as_error(false)
             .build()
             .call()?;
+
+        if response.status() == 429 {
+            let retry_after = response
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .map(String::from);
+            return Err(GetUsageError::RateLimited { retry_after });
+        }
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!("http status: {}", response.status()).into());
+        }
 
         let usage: UsageStats = response.body_mut().read_json()?;
         Ok(usage)

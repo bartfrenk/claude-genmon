@@ -7,7 +7,8 @@ script that reports Claude Code usage (5-hour and 7-day utilization) from
 ## Install
 
 ```sh
-cargo install --path .
+make install
 ```
 
-This installs a `claude-genmon` executable (into `~/.cargo/bin` by default).
+This installs a `claude-genmon` executable into `~/.local/bin`, plus the panel
+icon into `~/.local/share/claude-genmon`. Run `make uninstall` to remove them.
